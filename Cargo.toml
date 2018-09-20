@@ -1,0 +1,12 @@
+[package]
+name = "flat_engine"
+version = "0.1.0"
+authors = ["admin <merlotec@gmail.com>"]
+
+[dependencies]
+gfx = "*"
+glutin = "*"
+gfx_window_glutin = "*"
+gfx_device_gl = "0.15.3"
+time = "0.1.*"
+cgmath = "0.14.*"
