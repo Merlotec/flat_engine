@@ -13,9 +13,6 @@ use self::glutin::Api::OpenGl;
 use self::glutin::GlWindow;
 use std::convert::AsMut;
 
-pub type ColorFormat = gfx::format::Srgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
-
 gfx_defines!{
 
     vertex Vertex {
@@ -39,15 +36,15 @@ gfx_defines!{
 
 pub struct GeometryRenderer {
 
-    data: geometry::pipe::Data<gfx_device_gl::Resources>,
-    slice: gfx::Slice<gfx_device_gl::Resources>,
-    pipeline_state: gfx::PipelineState<gfx_device_gl::Resources, geometry::pipe::Meta>
+    data: geometry::pipe::Data<ResourceType>,
+    slice: gfx::Slice<ResourceType>,
+    pipeline_state: gfx::PipelineState<ResourceType, geometry::pipe::Meta>
 
 }
 
 impl GeometryRenderer {
 
-    pub fn new(data: geometry::pipe::Data<gfx_device_gl::Resources>, slice: gfx::Slice<gfx_device_gl::Resources>, pipeline_state: gfx::PipelineState<gfx_device_gl::Resources, geometry::pipe::Meta>) -> GeometryRenderer {
+    pub fn new(data: geometry::pipe::Data<ResourceType>, slice: gfx::Slice<ResourceType>, pipeline_state: gfx::PipelineState<ResourceType, geometry::pipe::Meta>) -> GeometryRenderer {
         return GeometryRenderer { data, slice, pipeline_state };
     }
 

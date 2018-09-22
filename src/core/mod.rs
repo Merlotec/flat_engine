@@ -10,8 +10,7 @@ use self::glutin::{GlContext, GlRequest};
 use self::glutin::Api::OpenGl;
 use self::glutin::GlWindow;
 
-pub type ColorFormat = gfx::format::Srgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
+use self::cgmath::*;
 
 pub struct RenderHints {
 
@@ -32,9 +31,9 @@ impl RenderHints {
 pub struct Renderer {
 
     pub factory: Factory,
-    pub encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>,
+    pub encoder: gfx::Encoder<ResourceType, gfx_device_gl::CommandBuffer>,
     pub device: Box<gfx_device_gl::Device>,
-    pub render_view: gfx::handle::RenderTargetView<gfx_device_gl::Resources, (gfx::format::R8_G8_B8_A8, gfx::format::Srgb)>
+    pub render_view: gfx::handle::RenderTargetView<ResourceType, (gfx::format::R8_G8_B8_A8, gfx::format::Unorm)>,
 
 }
 
@@ -62,14 +61,20 @@ impl FlatEngine {
 
         let (window, mut device, mut factory, color_view, mut depth_view) = gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_builder, contextbuilder, &events_loop);
 
+        let matrix: Matrix4<f32> = ortho(0.0, window.get_inner_size().unwrap().width as f32, 0.0, window.get_inner_size().unwrap().height as f32, 100.0, -100.0);
+
+        let mut hints: RenderHints = RenderHints::new();
+
+        hints.global_trans = Transform::from_matrix(matrix);
+
         // Put at the start of your file, outside of the loop
-        let mut encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer> = factory.create_command_buffer().into();
+        let mut encoder: gfx::Encoder<ResourceType, gfx_device_gl::CommandBuffer> = factory.create_command_buffer().into();
 
         return FlatEngine {
             renderer: Renderer { factory: factory, encoder: encoder, device: Box::new(device), render_view: color_view },
             window: window,
             events_loop: events_loop,
-            hints: RenderHints::new()
+            hints: hints
         };
 
     }

@@ -3,6 +3,8 @@ use std::ops::Sub;
 use std::ops::Mul;
 use std::ops::Div;
 
+use cgmath::Matrix4;
+
 pub trait Vector<T> {
 
     fn at(self, index: usize) -> T;
@@ -14,6 +16,16 @@ pub struct Vector2<T> {
 
     pub x: T,
     pub y: T
+
+}
+
+impl<T> Vector2<T> {
+
+    pub fn new(x: T, y: T) -> Vector2<T> {
+
+        return Vector2 { x, y };
+
+    }
 
 }
 
@@ -158,6 +170,19 @@ impl Transform {
             [0.0, 0.0, 0.0, 1.0]
             ]
         };
+    }
+
+    pub fn from_matrix(matrix: Matrix4<f32>) -> Transform {
+
+        return Transform {
+            data: [
+                [matrix.x.x, matrix.y.x, matrix.z.x, matrix.w.x],
+                [matrix.x.y, matrix.y.y, matrix.z.y, matrix.w.y],
+                [matrix.x.z, matrix.y.z, matrix.z.z, matrix.w.z],
+                [matrix.x.w, matrix.y.w, matrix.z.w, matrix.w.w]
+            ]
+        };
+
     }
 
 
