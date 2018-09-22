@@ -34,6 +34,7 @@ pub struct Renderer {
     pub encoder: gfx::Encoder<ResourceType, gfx_device_gl::CommandBuffer>,
     pub device: Box<gfx_device_gl::Device>,
     pub render_view: gfx::handle::RenderTargetView<ResourceType, (gfx::format::R8_G8_B8_A8, gfx::format::Unorm)>,
+    pub depth_view: gfx::handle::DepthStencilView<ResourceType, (gfx::format::D24_S8, gfx::format::Unorm)>,
 
 }
 
@@ -71,7 +72,7 @@ impl FlatEngine {
         let mut encoder: gfx::Encoder<ResourceType, gfx_device_gl::CommandBuffer> = factory.create_command_buffer().into();
 
         return FlatEngine {
-            renderer: Renderer { factory: factory, encoder: encoder, device: Box::new(device), render_view: color_view },
+            renderer: Renderer { factory: factory, encoder: encoder, device: Box::new(device), render_view: color_view, depth_view: depth_view },
             window: window,
             events_loop: events_loop,
             hints: hints
@@ -90,6 +91,19 @@ impl FlatEngine {
         self.window.swap_buffers().unwrap();
         self.renderer.device.cleanup();
 
+    }
+
+    pub fn hande_event(&mut self, event: glutin::Event) {
+
+
+        if let glutin::Event::WindowEvent { event, .. } = event {
+            match event {
+                glutin::WindowEvent::Resized(s) => {
+                    gfx_window_glutin::update_views(&self.window, &mut self.renderer.render_view, &mut self.renderer.depth_view);
+                }
+                _ => (),
+            }
+        }
     }
 
     pub fn load(&mut self, drawable: &mut Drawable) {
