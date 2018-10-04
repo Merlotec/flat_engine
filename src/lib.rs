@@ -5,25 +5,23 @@
 #[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
-extern crate glutin;
-extern crate image;
+pub extern crate glutin;
+pub extern crate image;
 extern crate cgmath;
 extern crate gfx_device_gl;
-extern crate rusttype;
+pub extern crate rusttype;
 extern crate stopwatch;
 
-mod core;
-mod geometry;
-mod types;
-mod node;
-mod render;
-mod text;
+pub mod core;
+pub mod geometry;
+pub mod types;
+pub mod node;
+pub mod render;
+pub mod text;
+pub mod spatial;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
 pub type ResourceType = gfx_device_gl::Resources;
-
-// THE FOLLOWING CODE IS TESTING CODE -- NOT PART OF LIBRARY DISTRIBUTION
-
 pub use self::types::*;

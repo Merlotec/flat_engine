@@ -17,8 +17,9 @@ gfx_defines!{
 
     constant GeometryTransform {
 
-        local: [[f32; 4]; 4] = "local_Transform",
-        global: [[f32; 4]; 4] = "global_Transform",
+        model: [[f32; 4]; 4] = "model_Transform",
+        view: [[f32; 4]; 4] = "view_Transform",
+        projection: [[f32; 4]; 4] = "projection_Transform",
 
     }
 
@@ -60,16 +61,16 @@ impl UvVertexArray {
         }
     }
 
-    pub fn from_sized_node(node: &SizedNode) -> UvVertexArray {
+    pub fn from_rect(rect: &Rect) -> UvVertexArray {
 
         return UvVertexArray {
             data: [
-                UvVertex2f { pos: [node.get_pos().x as f32, node.get_pos().y as f32], uv: [0.0, 1.0] },
-                UvVertex2f { pos: [node.get_pos().x as f32 + node.get_scaled_size().x as f32, node.get_pos().y as f32], uv: [1.0, 1.0] },
-                UvVertex2f { pos: [node.get_pos().x as f32, node.get_pos().y as f32 + node.get_scaled_size().y as f32], uv: [0.0, 0.0] },
-                UvVertex2f { pos: [node.get_pos().x as f32 + node.get_scaled_size().x as f32, node.get_pos().y as f32 + node.get_scaled_size().y as f32], uv: [1.0, 0.0] },
-                UvVertex2f { pos: [node.get_pos().x as f32 + node.get_scaled_size().x as f32, node.get_pos().y as f32], uv: [1.0, 1.0] },
-                UvVertex2f { pos: [node.get_pos().x as f32, node.get_pos().y as f32 + node.get_scaled_size().y as f32], uv: [0.0, 0.0] }
+                UvVertex2f { pos: [rect.x, rect.y], uv: [0.0, 1.0] },
+                UvVertex2f { pos: [rect.x + rect.width, rect.y], uv: [1.0, 1.0] },
+                UvVertex2f { pos: [rect.x, rect.y + rect.height], uv: [0.0, 0.0] },
+                UvVertex2f { pos: [rect.x + rect.width, rect.y + rect.height], uv: [1.0, 0.0] },
+                UvVertex2f { pos: [rect.x + rect.width, rect.y], uv: [1.0, 1.0] },
+                UvVertex2f { pos: [rect.x, rect.y + rect.height], uv: [0.0, 0.0] }
             ]
         }
 
@@ -86,9 +87,21 @@ pub struct Texture {
 
 impl Texture {
 
+    pub fn new() -> Texture {
+
+        return Texture { data: vec![0, 0, 0, 0], dimensions: Vector2::new(1, 1) };
+
+    }
+
     pub fn from_data(data: &[u8], width: u16, height: u16) -> Texture {
 
         return Texture { data: Vec::from(data), dimensions: Vector2::new(width, height) };
+
+    }
+
+    pub fn from_image(image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>) -> Texture {
+
+        return Texture::from_data(image.as_ref(), image.dimensions().0 as u16, image.dimensions().1 as u16);
 
     }
 
@@ -98,6 +111,13 @@ impl Texture {
         let (width, height) = img.dimensions();
         return Texture { data: Vec::from(img.as_ref()), dimensions: Vector2::new(width as u16, height as u16) };
 
+    }
+
+    pub fn load_from_image(bytes: &[u8]) -> Texture {
+        use gfx::format::Rgba8;
+        let img = image::load_from_memory(bytes).unwrap().to_rgba();
+        let (width, height) = img.dimensions();
+        return Texture { data: Vec::from(img.as_ref()), dimensions: Vector2::new(width as u16, height as u16) };
     }
 
     pub fn get_shader_texture(&self, renderer: &mut core::Renderer) -> gfx::handle::ShaderResourceView<ResourceType, [f32; 4]> {
@@ -147,9 +167,10 @@ impl TextureRenderer {
 
     }
 
-    // Automatically applies global transform to the render.
-    pub fn render(&mut self, transform: Transform, engine: &mut core::FlatEngine) {
-        engine.renderer.encoder.update_buffer(&self.data.trans, &[GeometryTransform { local: transform.data, global: engine.hints.global_trans.data }], 0); //update buffers
+    // Automatically applies global Matrix4f to the render.
+    pub fn render(&mut self, model_trans: Matrix4f, view_trans: Matrix4f, projection_trans: Matrix4f, engine: &mut core::FlatEngine) {
+        //println!("{}", model_trans.x.x);
+        engine.renderer.encoder.update_buffer(&self.data.trans, &[GeometryTransform { model: model_trans.get_data(), view: view_trans.get_data(), projection: projection_trans.get_data() }], 0); //update buffers
         engine.renderer.encoder.draw(&self.slice, &mut self.pipeline_state, &self.data); // draw commands with buffer data and attached pso
         engine.renderer.encoder.flush(engine.renderer.device.as_mut()); // execute draw commands
     }
@@ -169,8 +190,8 @@ impl TextureRenderer {
 
 pub struct Sprite {
 
-    pub node: SizedNodeObject,
-    pub texture: Option<Texture>,
+    pub node: NodeObject2D,
+    pub texture: Box<Texture>,
     pub vertices: UvVertexArray,
     pub texture_renderer: Option<TextureRenderer>,
     pub update_texture: bool,
@@ -180,9 +201,11 @@ pub struct Sprite {
 
 impl Sprite {
 
-    pub fn new(texture: Option<Texture>) -> Sprite {
+    pub fn new() -> Sprite {
 
-        return Sprite { node: SizedNodeObject::new(), texture: texture,
+        return Sprite {
+            node: NodeObject2D::new(),
+            texture: Box::new(Texture::new()),
             vertices: UvVertexArray::zero(),
             texture_renderer: None,
             update_texture: false,
@@ -191,9 +214,34 @@ impl Sprite {
 
     }
 
-    pub fn set_texture(&mut self, texture: Texture) {
+    pub fn from_texture(texture: Box<Texture>) -> Sprite {
+        return Sprite {
+            node: NodeObject2D::new(),
+            texture: texture,
+            vertices: UvVertexArray::zero(),
+            texture_renderer: None,
+            update_texture: false,
+            has_loaded: false,
+        };
+    }
 
-        self.texture = Some(texture);
+    pub fn from_image_path(path: &'static str) -> Sprite {
+
+        let texture = Texture::load_from_path(path);
+
+        let size = Vector2f { x: texture.dimensions.x as f32, y: texture.dimensions.y as f32 };
+
+        let mut sprite = Sprite::from_texture(Box::new(texture));
+
+        sprite.set_size(size);
+
+        return sprite;
+
+    }
+
+    pub fn set_texture(&mut self, texture: Box<Texture>) {
+
+        self.texture = texture;
 
         if self.has_loaded {
             self.update_texture = true;
@@ -206,11 +254,8 @@ impl Sprite {
 impl core::Drawable for Sprite {
 
     fn load(&mut self, engine: &mut core::FlatEngine) {
-
-        self.vertices = UvVertexArray::from_sized_node(self);
-
-        self.texture_renderer = Some(TextureRenderer::create(self.texture.as_ref().unwrap(), &self.vertices.data, include_bytes!("../../shaders/std_texture_v.glsl"), include_bytes!("../../shaders/std_texture_f.glsl"), &mut engine.renderer));
-
+        self.vertices = UvVertexArray::from_rect(&Rect { x: 0.0, y: 0.0, width: self.get_fixed_size().x, height: self.get_fixed_size().y });
+        self.texture_renderer = Some(TextureRenderer::create(self.texture.as_ref(), &self.vertices.data, include_bytes!("../../shaders/std_texture_v.glsl"), include_bytes!("../../shaders/std_texture_f.glsl"), &mut engine.renderer));
         self.has_loaded = true;
 
     }
@@ -220,24 +265,19 @@ impl core::Drawable for Sprite {
         // Check if all neccessary parts have been initialized.
         if self.texture_renderer.is_some() {
 
-            // If any of the position or size values have changed, we need to update the vertices.
-            if self.node.acknowledge_values_changed() {
-                // Recreate the vertices.
-                self.vertices = UvVertexArray::from_sized_node(self);
-                // Submit the new vertices to the buffer.
-                self.texture_renderer.as_mut().unwrap().update_vertices(&self.vertices.data, &mut engine.renderer);
-
-            }
-
             // If the texture has changed, update the texture.
             if self.update_texture {
 
-                self.texture_renderer.as_mut().unwrap().update_texture(self.texture.as_ref().unwrap(), &mut engine.renderer);
+                if !self.has_loaded {
+                    self.load(engine);
+                } else {
+                    self.texture_renderer.as_mut().unwrap().update_texture(self.texture.as_ref(), &mut engine.renderer);
 
+                }
                 self.update_texture = false;
             }
 
-            self.texture_renderer.as_mut().unwrap().render(self.node.trans, engine);
+            self.texture_renderer.as_mut().unwrap().render(self.node.get_trans(), engine.renderer.camera.view, engine.renderer.camera.projection, engine);
 
         } else {
             // We never want to see this.
@@ -252,42 +292,22 @@ impl core::Drawable for Sprite {
 
 }
 
-impl Node for Sprite {
+impl Node2D for Sprite {
 
-    fn set_pos(&mut self, pos: Vector2f) {
-        self.node.set_pos(pos);
-    }
-    fn get_pos(&self) -> Vector2f {
-        return self.node.get_pos();
+    fn get_node_obj_mut(&mut self) -> &mut NodeObject2D {
+        return &mut self.node;
     }
 
-    fn set_trans(&mut self, trans: Transform) {
-        self.node.set_trans(trans);
-    }
-    fn get_trans(&self) -> Transform {
-        return self.node.get_trans();
+    fn get_node_obj(&self) -> &NodeObject2D {
+        return &self.node;
     }
 
 }
 
-impl SizedNode for Sprite {
+impl SizedNode2D for Sprite {
 
-    fn set_size(&mut self, size: Vector2f) {
-        self.node.set_size(size);
-    }
-    fn get_size(&self) -> Vector2f {
-        return self.node.get_size();
-    }
-
-    fn set_scale(&mut self, scale: Vector2f) {
-        self.node.set_scale(scale);
-    }
-    fn get_scale(&self) -> Vector2f {
-        return self.node.get_scale();
-    }
-
-    fn get_scaled_size(&self) -> Vector2f {
-        return self.node.get_scaled_size();
+    fn get_fixed_size(&self) -> Vector2f {
+        return Vector2f { x: self.texture.as_ref().dimensions.x as f32, y: self.texture.as_ref().dimensions.y as f32 };
     }
 
 }

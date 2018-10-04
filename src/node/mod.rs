@@ -2,160 +2,192 @@
 use super::*;
 
 use self::types::*;
+use cgmath::Matrix;
 
 #[derive(Copy, Clone)]
 /**
 The default node object contains the data necessary to handle a basic node (position and transform).
 */
-pub struct NodeObject {
+pub struct NodeObject2D {
 
-    pub pos: Vector2f,
-    pub trans: Transform,
-    pub values_changed: bool,
+    pub trans: Matrix4f,
 
 }
 
-impl NodeObject {
+impl NodeObject2D {
 
-    pub fn new() -> NodeObject {
+    pub fn new() -> NodeObject2D {
 
-        return NodeObject { pos: Vector2f::zero(), trans: Transform::identity(), values_changed: false }
+        return NodeObject2D { trans: Matrix4f::identity() };
 
     }
 
-    pub fn acknowledge_values_changed(&mut self) -> bool {
+    pub fn from(trans: Matrix4f) -> NodeObject2D {
 
-        if self.values_changed {
-            self.values_changed = false;
-            return true;
-        }
-        return false;
+        return NodeObject2D { trans: Matrix4f::identity()  };
+
+    }
+
+    pub fn pos_and_scale(pos: Vector2f, scale: Vector2f) -> NodeObject2D {
+
+        let mut trans: Matrix4f = Matrix4f::identity();
+        trans.set_translation(pos.to_vec3());
+        trans.set_scale(scale.to_vec3());
+
+        return NodeObject2D { trans: Matrix4f::identity()  };
 
     }
 
 }
 
-impl Node for NodeObject {
+impl NodeObject2D {
 
-    fn set_pos(&mut self, pos: Vector2f) {
-        self.pos = pos;
-        self.values_changed = true;
+    pub fn set_pos(&mut self, pos: Vector2f) {
+        self.trans.set_translation(pos.to_vec3());
     }
-    fn get_pos(&self) -> Vector2f {
-        return self.pos;
+    pub fn get_pos(&self) -> Vector2f {
+        return self.trans.get_translation().to_vec2();
     }
-
-    fn set_trans(&mut self, trans: Transform){
+    pub fn set_scale(&mut self, scale: Vector2f) {
+        self.trans.set_scale(scale.to_vec3());
+    }
+    pub fn get_scale(&self) -> Vector2f {
+        return self.trans.get_scale().to_vec2();
+    }
+    pub fn set_trans(&mut self, trans: Matrix4f) {
         self.trans = trans;
-        self.values_changed = true;
     }
-    fn get_trans(&self) -> Transform {
+    pub fn get_trans(&self) -> Matrix4f {
         return self.trans;
     }
 
 }
 
-pub trait Node {
+pub trait Node2D {
 
-    fn set_pos(&mut self, pos: Vector2f);
-    fn get_pos(&self) -> Vector2f;
-
-    fn set_trans(&mut self, transform: Transform);
-    fn get_trans(&self) -> Transform;
-
-}
-
-/**
-The sized node object contains the data necessary to handle a basic node with a size.
-*/
-pub struct SizedNodeObject {
-
-    pub pos: Vector2f,
-    pub trans: Transform,
-    pub size: Vector2f,
-    pub scale: Vector2f,
-    pub values_changed: bool,
-
-}
-
-impl SizedNodeObject {
-
-    pub fn new() -> SizedNodeObject {
-
-        return SizedNodeObject { pos: Vector2f::zero(), trans: Transform::identity(), size: Vector2f::zero(), scale: Vector2f::new(1.0, 1.0), values_changed: false }
-
-    }
-
-    pub fn from_size(size: Vector2f) -> SizedNodeObject {
-
-        return SizedNodeObject { pos: Vector2f::zero(), trans: Transform::identity(), size: size, scale: Vector2f::new(1.0, 1.0), values_changed: false }
-
-    }
-
-    pub fn acknowledge_values_changed(&mut self) -> bool {
-
-        if self.values_changed {
-            self.values_changed = false;
-            return true;
-        }
-        return false;
-
-    }
-
-}
-
-impl Node for SizedNodeObject {
+    fn get_node_obj_mut(&mut self) -> &mut NodeObject2D;
+    fn get_node_obj(&self) -> &NodeObject2D;
 
     fn set_pos(&mut self, pos: Vector2f) {
-        self.pos = pos;
-        self.values_changed = true;
+        self.get_node_obj_mut().set_pos(pos);
     }
+
     fn get_pos(&self) -> Vector2f {
-        return self.pos;
-    }
-
-    fn set_trans(&mut self, trans: Transform){
-        self.trans = trans;
-        self.values_changed = true;
-    }
-    fn get_trans(&self) -> Transform {
-        return self.trans;
-    }
-
-}
-
-impl SizedNode for SizedNodeObject {
-
-    fn set_size(&mut self, size: Vector2f) {
-        self.size = size;
-        self.values_changed = true;
-    }
-    fn get_size(&self) -> Vector2f {
-        return self.size;
+        return self.get_node_obj().get_pos();
     }
 
     fn set_scale(&mut self, scale: Vector2f) {
-        self.scale = scale;
-        self.values_changed = true;
+        self.get_node_obj_mut().set_scale(scale);
     }
     fn get_scale(&self) -> Vector2f {
-        return self.scale;
+        return self.get_node_obj().get_scale();
     }
-
-    fn get_scaled_size(&self) -> Vector2f {
-        return self.size * self.scale;
+    fn set_trans(&mut self, trans: Matrix4f) {
+        self.get_node_obj_mut().set_trans(trans);
+    }
+    fn get_trans(&self) -> Matrix4f {
+        return self.get_node_obj().get_trans();
     }
 
 }
 
-pub trait SizedNode : Node {
+pub trait SizedNode2D : Node2D {
 
-    fn set_size(&mut self, size: Vector2f);
-    fn get_size(&self) -> Vector2f;
+    fn get_fixed_size(&self) -> Vector2f;
 
-    fn set_scale(&mut self, scale: Vector2f);
-    fn get_scale(&self) -> Vector2f;
+    fn set_size(&mut self, size: Vector2f) {
 
-    fn get_scaled_size(&self) -> Vector2f;
+        let fs: Vector2f = self.get_fixed_size();
+        if fs.x == 0.0 || fs.y == 0.0 {
+            panic!("Cannot set the scaled size of an object with a fixed size of 0.")
+        } else {
+            self.set_scale(Vector2f { x: size.x / fs.x, y: size.y / fs.y });
+        }
+
+    }
+
+    fn get_size(&self) -> Vector2f {
+        return Vector2f { x: self.get_fixed_size().x * self.get_scale().x, y: self.get_fixed_size().y * self.get_scale().y };
+    }
+
+    fn get_rect(&self) -> Rect {
+
+        return Rect { x: self.get_pos().x, y: self.get_pos().y, width: self.get_size().x, height: self.get_size().y };
+
+    }
+
+}
+
+
+pub trait Node3D {
+
+    fn get_node_obj_mut(&mut self) -> &mut NodeObject3D;
+
+    fn get_node_obj(&self) -> &NodeObject3D;
+
+    fn set_pos(&mut self, pos: Vector3f) {
+        self.get_node_obj_mut().set_pos(pos);
+    }
+
+    fn get_pos(&self) -> Vector3f {
+        return self.get_node_obj().get_pos();
+    }
+
+    fn set_scale(&mut self, scale: Vector3f) {
+        self.get_node_obj_mut().set_scale(scale);
+    }
+
+    fn get_scale(&self) -> Vector3f {
+        return self.get_node_obj().get_scale();
+    }
+    fn set_trans(&mut self, trans: Matrix4f) {
+        self.get_node_obj_mut().set_trans(trans);
+    }
+    fn get_trans(&self) -> Matrix4f {
+        return self.get_node_obj().get_trans();
+    }
+
+}
+
+pub struct NodeObject3D {
+
+    pub trans: Matrix4f
+}
+
+impl NodeObject3D {
+
+    pub fn new() -> NodeObject3D {
+
+        return NodeObject3D { trans: Matrix4f::identity() };
+
+    }
+
+}
+
+impl NodeObject3D {
+
+    pub fn set_pos(&mut self, pos: Vector3f) {
+        self.trans.set_translation(pos);
+    }
+
+    pub fn get_pos(&self) -> Vector3f {
+        return self.trans.get_translation();
+    }
+
+    pub fn set_scale(&mut self, scale: Vector3f) {
+        self.trans.set_scale(scale);
+    }
+
+    pub fn get_scale(&self) -> Vector3f {
+        return self.trans.get_scale();
+    }
+
+    pub fn set_trans(&mut self, trans: Matrix4f) {
+        self.trans = trans;
+    }
+
+    pub fn get_trans(&self) -> Matrix4f {
+        return self.trans;
+    }
 
 }

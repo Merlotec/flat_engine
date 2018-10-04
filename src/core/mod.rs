@@ -1,6 +1,6 @@
 use super::*;
 
-use self::types::Transform;
+use self::types::*;
 use gfx::traits::FactoryExt;
 use glutin::dpi::*;
 use self::gfx::Device;
@@ -10,23 +10,7 @@ use self::glutin::{GlContext, GlRequest};
 use self::glutin::Api::OpenGl;
 use self::glutin::GlWindow;
 
-use self::cgmath::*;
-
-pub struct RenderHints {
-
-    pub global_trans: Transform
-
-}
-
-impl RenderHints {
-
-    pub fn new() -> RenderHints {
-
-        return RenderHints { global_trans: Transform::identity() };
-
-    }
-
-}
+use self::cgmath::Matrix4;
 
 pub struct Renderer {
 
@@ -36,6 +20,42 @@ pub struct Renderer {
     pub render_view: gfx::handle::RenderTargetView<ResourceType, (gfx::format::R8_G8_B8_A8, gfx::format::Unorm)>,
     pub depth_view: gfx::handle::DepthStencilView<ResourceType, (gfx::format::D24_S8, gfx::format::Unorm)>,
 
+    pub camera: Camera,
+
+}
+
+pub struct Camera {
+
+    pub projection: Matrix4f,
+    pub view: Matrix4f,
+
+}
+
+impl Camera {
+
+    pub fn ortho(size: Vector2f) -> Camera {
+
+        return Camera {
+            projection: cgmath::ortho(0.0, size.x, 0.0, size.y, 100.0, -100.0),
+            view: Matrix4f::identity()
+        };
+
+    }
+
+    pub fn set_pos(&mut self, pos: Vector3f) {
+
+        self.view.w.x = -pos.x;
+        self.view.w.y = -pos.y;
+        self.view.w.z = -pos.z;
+
+    }
+
+    pub fn get_pos(&self) -> Vector3f {
+
+        return Vector3f { x: -self.view.w.x, y: -self.view.w.y, z: -self.view.w.z };
+
+    }
+
 }
 
 pub struct FlatEngine {
@@ -43,9 +63,6 @@ pub struct FlatEngine {
     pub renderer: Renderer,
     pub window: GlWindow,
     pub events_loop: glutin::EventsLoop,
-
-    // Higher level data.
-    pub hints: RenderHints
 
 }
 
@@ -62,20 +79,15 @@ impl FlatEngine {
 
         let (window, mut device, mut factory, color_view, mut depth_view) = gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_builder, contextbuilder, &events_loop);
 
-        let matrix: Matrix4<f32> = ortho(0.0, window.get_inner_size().unwrap().width as f32, 0.0, window.get_inner_size().unwrap().height as f32, 100.0, -100.0);
-
-        let mut hints: RenderHints = RenderHints::new();
-
-        hints.global_trans = Transform::from_matrix(matrix);
+        let window_size: Vector2f = Vector2f { x: window.get_inner_size().unwrap().width as f32, y: window.get_inner_size().unwrap().height as f32 };
 
         // Put at the start of your file, outside of the loop
         let mut encoder: gfx::Encoder<ResourceType, gfx_device_gl::CommandBuffer> = factory.create_command_buffer().into();
 
         return FlatEngine {
-            renderer: Renderer { factory: factory, encoder: encoder, device: Box::new(device), render_view: color_view, depth_view: depth_view },
+            renderer: Renderer { factory: factory, encoder: encoder, device: Box::new(device), render_view: color_view, depth_view: depth_view, camera: Camera::ortho(window_size) },
             window: window,
-            events_loop: events_loop,
-            hints: hints
+            events_loop: events_loop
         };
 
     }
@@ -87,23 +99,44 @@ impl FlatEngine {
     }
 
     pub fn swap_buffers(&mut self) {
-
         self.window.swap_buffers().unwrap();
         self.renderer.device.cleanup();
 
     }
 
-    pub fn hande_event(&mut self, event: glutin::Event) {
+    pub fn flush(&mut self) {
+        self.renderer.encoder.flush(self.renderer.device.as_mut());
+    }
 
+    pub fn update_size(&mut self) {
 
-        if let glutin::Event::WindowEvent { event, .. } = event {
-            match event {
-                glutin::WindowEvent::Resized(s) => {
-                    gfx_window_glutin::update_views(&self.window, &mut self.renderer.render_view, &mut self.renderer.depth_view);
-                }
-                _ => (),
-            }
-        }
+        gfx_window_glutin::update_views(&self.window, &mut self.renderer.render_view, &mut self.renderer.depth_view);
+
+    }
+
+    pub fn get_dimensions(&self) -> Vector2f {
+
+        let size = self.window.get_inner_size().unwrap();
+        return Vector2f { x: size.width as f32, y: size.height as f32 };
+
+    }
+
+    pub fn scale(&self, scale: Vector2f) -> Vector2f {
+
+        let d: Vector2f = self.get_dimensions();
+
+        return Vector2f::new(d.x * scale.x, d.y * scale.y);
+
+    }
+
+    pub fn layout_sized_from_center(&self, node: &mut node::SizedNode2D, normalized_pos: Vector2f) {
+
+        let x: f32 = (self.get_dimensions().x * normalized_pos.x) - (node.get_size().x / 2.0);
+
+        let y: f32 = (self.get_dimensions().y * normalized_pos.y) - (node.get_size().y / 2.0);
+
+        node.set_pos(Vector2f { x, y });
+
     }
 
     pub fn load(&mut self, drawable: &mut Drawable) {

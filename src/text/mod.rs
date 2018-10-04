@@ -61,7 +61,7 @@ impl Texture {
 
         let (width, height) = image.dimensions();
 
-        return Texture { data: Vec::from(image.as_ref()), dimensions: Vector2::new(width as u16, height as u16) };
+        return Texture { data: Vec::from(image.as_ref()), dimensions: Vector2 { x: width as u16, y: height as u16 } };
     }
 
 }
@@ -71,8 +71,8 @@ impl Sprite {
     pub fn from_text(text: &str, font: &rusttype::Font, size: f32, color: Color) -> Sprite {
 
         return Sprite {
-            node: SizedNodeObject::new(),
-            texture: Some(Texture::from_text(text, font, size, color)),
+            node: NodeObject2D::new(),
+            texture: Box::new(Texture::from_text(text, font, size, color)),
             vertices: UvVertexArray::zero(),
             texture_renderer: None,
             update_texture: false,
@@ -85,7 +85,7 @@ impl Sprite {
 
 pub struct Text<'a> {
 
-    pub node: SizedNodeObject,
+    pub node: NodeObject2D,
     pub vertices: UvVertexArray,
     pub text: String,
     pub texture: Texture,
@@ -105,7 +105,7 @@ impl<'a> Text<'a> {
         let tex = Texture::from_text(text, &font, size, color);
 
         return Text {
-            node: SizedNodeObject::from_size(Text::adjust_size(&tex, size)),
+            node: NodeObject2D::new(),
             vertices: UvVertexArray::zero(),
             text: text.to_string(),
             texture: tex,
@@ -123,9 +123,9 @@ impl<'a> Text<'a> {
 
         self.color = color;
 
-        if self.has_loaded {
-            self.update_text = true;
-        }
+        self.texture = Texture::from_text(&self.text, &self.font, self.size, self.color);
+
+        self.update_text = true;
 
     }
 
@@ -135,60 +135,30 @@ impl<'a> Text<'a> {
 
         self.texture = Texture::from_text(&self.text, &self.font, self.size, self.color);
 
-        self.node.size = Text::adjust_size(&self.texture, self.size);
-
         if self.has_loaded {
             self.update_text = true;
         }
 
     }
 
-    fn adjust_size(tex: &Texture, size: f32) -> Vector2f {
+}
 
-        let mut sf: f64 = tex.dimensions.x as f64 / tex.dimensions.y as f64;
+impl<'a> Node2D for Text<'a> {
 
-        return Vector2f::new(size as f64 * sf, size as f64);
+    fn get_node_obj_mut(&mut self) -> &mut NodeObject2D {
+        return &mut self.node;
+    }
 
+    fn get_node_obj(&self) -> &NodeObject2D {
+        return &self.node;
     }
 
 }
 
-impl<'a> Node for Text<'a> {
+impl<'a> SizedNode2D for Text<'a> {
 
-    fn set_pos(&mut self, pos: Vector2f) {
-        self.node.set_pos(pos);
-    }
-    fn get_pos(&self) -> Vector2f {
-        return self.node.get_pos();
-    }
-
-    fn set_trans(&mut self, trans: Transform) {
-        self.node.set_trans(trans);
-    }
-    fn get_trans(&self) -> Transform {
-        return self.node.get_trans();
-    }
-
-}
-
-impl<'a> SizedNode for Text<'a> {
-
-    fn set_size(&mut self, size: Vector2f) {
-        //self.node.set_size(size);
-    }
-    fn get_size(&self) -> Vector2f {
-        return self.node.get_size();
-    }
-
-    fn set_scale(&mut self, scale: Vector2f) {
-        self.node.set_scale(scale);
-    }
-    fn get_scale(&self) -> Vector2f {
-        return self.node.get_scale();
-    }
-
-    fn get_scaled_size(&self) -> Vector2f {
-        return self.node.get_scaled_size();
+    fn get_fixed_size(&self) -> Vector2f {
+        return Vector2f { x: self.texture.dimensions.x as f32, y: self.texture.dimensions.y as f32 };
     }
 
 }
@@ -197,7 +167,7 @@ impl<'a> core::Drawable for Text<'a> {
 
     fn load(&mut self, engine: &mut core::FlatEngine) {
 
-        self.vertices = UvVertexArray::from_sized_node(self);
+        self.vertices = UvVertexArray::from_rect(&Rect { x: 0.0, y: 0.0, width: self.get_fixed_size().x, height: self.get_fixed_size().y });
 
         self.texture_renderer = Some(TextureRenderer::create(&self.texture, &self.vertices.data, include_bytes!("../../shaders/std_texture_v.glsl"), include_bytes!("../../shaders/std_texture_f.glsl"), &mut engine.renderer));
 
@@ -210,28 +180,19 @@ impl<'a> core::Drawable for Text<'a> {
         // Check if all neccessary parts have been initialized.
         if self.texture_renderer.is_some() {
 
-            // If any of the position or size values have changed, we need to update the vertices.
-            if self.node.acknowledge_values_changed() {
-                // Recreate the vertices.
-                self.vertices = UvVertexArray::from_sized_node(self);
-                // Submit the new vertices to the buffer.
-                self.texture_renderer.as_mut().unwrap().update_vertices(&self.vertices.data, &mut engine.renderer);
-
-            }
-
             if self.update_text {
 
                 self.texture_renderer.as_mut().unwrap().update_texture(&self.texture, &mut engine.renderer);
 
                 // Recreate the vertices.
-                self.vertices = UvVertexArray::from_sized_node(self);
+                self.vertices = UvVertexArray::from_rect(&self.get_rect());
                 // Submit the new vertices to the buffer.
                 self.texture_renderer.as_mut().unwrap().update_vertices(&self.vertices.data, &mut engine.renderer);
 
                 self.update_text = false;
             }
 
-            self.texture_renderer.as_mut().unwrap().render(self.node.trans, engine);
+            self.texture_renderer.as_mut().unwrap().render(self.node.get_trans(), engine.renderer.camera.view, engine.renderer.camera.projection, engine);
 
         } else {
             // We never want to see this.

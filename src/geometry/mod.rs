@@ -22,8 +22,9 @@ gfx_defines!{
 
     constant GeometryTransform {
 
-        local: [[f32; 4]; 4] = "local_Transform",
-        global: [[f32; 4]; 4] = "global_Transform",
+        model: [[f32; 4]; 4] = "model_Transform",
+        view: [[f32; 4]; 4] = "view_Transform",
+        projection: [[f32; 4]; 4] = "projection_Transform",
 
     }
 
@@ -70,9 +71,9 @@ impl GeometryRenderer {
 
     }
 
-    // Automatically applies global transform to the render.
-    pub fn render(&mut self, transform: Transform, engine: &mut core::FlatEngine) {
-        engine.renderer.encoder.update_buffer(&self.data.trans, &[GeometryTransform { local: transform.data, global: engine.hints.global_trans.data }], 0); //update buffers
+    // Automatically applies global Matrix4f to the render.
+    pub fn render(&mut self, model_trans: Matrix4f, view_trans: Matrix4f, projection_trans: Matrix4f, engine: &mut core::FlatEngine) {
+        engine.renderer.encoder.update_buffer(&self.data.trans, &[GeometryTransform { model: model_trans.get_data(), view: view_trans.get_data(), projection: projection_trans.get_data() }], 0); //update buffers
         engine.renderer.encoder.draw(&self.slice, &mut self.pipeline_state, &self.data); // draw commands with buffer data and attached pso
         engine.renderer.encoder.flush(engine.renderer.device.as_mut()); // execute draw commands
     }
@@ -81,7 +82,7 @@ impl GeometryRenderer {
 
 pub struct Triangle {
 
-    node: NodeObject,
+    node: NodeObject2D,
     vertices: [Vertex; 3],
     color: Color,
     geometry_renderer: Option<GeometryRenderer>
@@ -94,7 +95,7 @@ impl Triangle {
     pub fn new(color: Color) -> Triangle {
 
         return Triangle {
-            node: NodeObject::new(),
+            node: NodeObject2D::new(),
             vertices: [
                 Vertex { pos: [ -0.5, -0.5], color: color.to_raw_color() },
                 Vertex { pos: [  0.5, -0.5 ], color: color.to_raw_color() },
@@ -112,14 +113,14 @@ impl Triangle {
 impl core::Drawable for Triangle {
 
     fn load(&mut self, engine: &mut core::FlatEngine) {
-        self.geometry_renderer = Some(GeometryRenderer::from_vertices(&self.vertices, include_bytes!("../../shaders/triangle_v.glsl"), include_bytes!("../../shaders/triangle_f.glsl"), engine));
+        self.geometry_renderer = Some(GeometryRenderer::from_vertices(&self.vertices, include_bytes!("../../shaders/std_geom_v.glsl"), include_bytes!("../../shaders/std_geom_f.glsl"), engine));
     }
 
     fn render(&mut self, engine: &mut core::FlatEngine) {
 
         // Check if all neccessary parts have been initialized.
         if self.geometry_renderer.is_some() {
-            self.geometry_renderer.as_mut().unwrap().render(self.node.trans, engine);
+            self.geometry_renderer.as_mut().unwrap().render(self.node.get_trans(), engine.renderer.camera.view, engine.renderer.camera.projection, engine);
         } else {
             panic!("The triangle object is being drawn before it has been initialized!");
         }
@@ -132,20 +133,14 @@ impl core::Drawable for Triangle {
 
 }
 
-impl Node for Triangle {
+impl Node2D for Triangle {
 
-    fn set_pos(&mut self, pos: Vector2f) {
-        self.node.set_pos(pos);
-    }
-    fn get_pos(&self) -> Vector2f {
-        return self.node.get_pos();
+    fn get_node_obj_mut(&mut self) -> &mut NodeObject2D {
+        return &mut self.node;
     }
 
-    fn set_trans(&mut self, trans: Transform) {
-        self.node.set_trans(trans);
-    }
-    fn get_trans(&self) -> Transform {
-        return self.node.get_trans();
+    fn get_node_obj(&self) -> &NodeObject2D {
+        return &self.node;
     }
 
 }
